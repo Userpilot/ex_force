@@ -174,7 +174,11 @@ defmodule Salesforce do
       {:ok, version_maps} = ExForce.versions(instance_url)
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
-      with client = ExForce.build_client(oauth_response, api_version: latest_version),
+      with client =
+             ExForce.build_client(oauth_response,
+               api_version: latest_version,
+               adapter: Tesla.Adapter.Finch
+             ),
            {:ok, body} <- ExForce.info(client, id) do
         Process.send_after(self(), {:refresh_token, app_token}, @refresh_token_interval_ms)
 
@@ -217,7 +221,12 @@ defmodule Salesforce do
       {:ok, version_maps} = ExForce.versions(instance_url)
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
-      client = ExForce.build_client(oauth_response, api_version: latest_version)
+      client =
+        ExForce.build_client(oauth_response,
+          api_version: latest_version,
+          adapter: Tesla.Adapter.Finch
+        )
+
       Process.send_after(self(), {:refresh_token, app_token}, @refresh_token_interval_ms)
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
