@@ -62,12 +62,13 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.JSON, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      {config(:adapter), [name: config(:name)]}
+      {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
   end
 
   defp get_headers(opts), do: Keyword.get(opts, :headers, [{"user-agent", @default_user_agent}])
 
+  @spec build_oauth_client(any(), keyword()) :: Tesla.Client.t()
   @doc """
   Returns a `Tesla` client for `ExForce.OAuth` functions
 
@@ -86,7 +87,7 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.DecodeJson, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      {config(:adapter), [name: config(:name)]}
+      {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
   end
 
