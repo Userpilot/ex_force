@@ -62,7 +62,7 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.JSON, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      {Tesla.Adapter.Finch, [name: ExForce.Client.FinchClient]}
+      {config(:adapter), [name: config(:name)]}
     )
   end
 
@@ -86,7 +86,7 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.DecodeJson, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      {Tesla.Adapter.Finch, [name: ExForce.Client.FinchClient]}
+      {config(:adapter), [name: config(:name)]}
     )
   end
 

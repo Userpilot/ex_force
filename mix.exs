@@ -39,8 +39,7 @@ defmodule ExForce.Mixfile do
       {:dialyxir, "~> 1.1", only: :dev, runtime: false},
       {:excoveralls, "~> 0.14", only: :test},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
-      {:inch_ex, "~> 2.0", only: [:dev, :test]},
-      {:finch, "~> 0.13"}
+      {:inch_ex, "~> 2.0", only: [:dev, :test]}
     ]
   end
 
