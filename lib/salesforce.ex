@@ -176,8 +176,7 @@ defmodule Salesforce do
 
       with client =
              ExForce.build_client(oauth_response,
-               api_version: latest_version,
-               adapter: Tesla.Adapter.Finch
+               api_version: latest_version
              ),
            {:ok, body} <- ExForce.info(client, id) do
         Process.send_after(self(), {:refresh_token, app_token}, @refresh_token_interval_ms)
@@ -223,8 +222,7 @@ defmodule Salesforce do
 
       client =
         ExForce.build_client(oauth_response,
-          api_version: latest_version,
-          adapter: Tesla.Adapter.Finch
+          api_version: latest_version
         )
 
       Process.send_after(self(), {:refresh_token, app_token}, @refresh_token_interval_ms)
