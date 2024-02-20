@@ -1,3 +1,14 @@
+defmodule ExForce.Client.Tesla.Config do
+  defmacro __using__(_options \\ nil) do
+    quote do
+      def config, do: Application.get_env(:ex_force, ExForce.Client.Tesla)
+
+      def config(key),
+        do: Application.get_env(:ex_force, ExForce.Client.Tesla)[key]
+    end
+  end
+end
+
 defmodule ExForce.Client.Tesla do
   @moduledoc """
   HTTP Client for Salesforce REST API using `Tesla`.
@@ -12,6 +23,8 @@ defmodule ExForce.Client.Tesla do
   """
 
   @behaviour ExForce.Client
+
+  use ExForce.Client.Tesla.Config
 
   alias ExForce.{
     Request,
@@ -49,12 +62,13 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.JSON, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      Keyword.get(opts, :adapter)
+      {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
   end
 
   defp get_headers(opts), do: Keyword.get(opts, :headers, [{"user-agent", @default_user_agent}])
 
+  @spec build_oauth_client(any(), keyword()) :: Tesla.Client.t()
   @doc """
   Returns a `Tesla` client for `ExForce.OAuth` functions
 
@@ -73,7 +87,7 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.DecodeJson, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)}
       ],
-      Keyword.get(opts, :adapter)
+      {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
   end
 

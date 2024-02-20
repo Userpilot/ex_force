@@ -218,6 +218,7 @@ defmodule Salesforce do
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
       client = ExForce.build_client(oauth_response, api_version: latest_version)
+
       Process.send_after(self(), {:refresh_token, app_token}, @refresh_token_interval_ms)
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
