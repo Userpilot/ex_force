@@ -84,8 +84,8 @@ defmodule Salesforce do
 
         {:noreply, %State{state | applications: applications}}
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, _reason} ->
+        {:noreply, state}
     end
   end
 
@@ -106,7 +106,7 @@ defmodule Salesforce do
         {:reply, response, %State{state | applications: applications}}
 
       {:error, reason} ->
-        {:error, reason}
+        {:reply, {:error, reason}, state}
     end
   end
 
@@ -123,7 +123,7 @@ defmodule Salesforce do
         {:reply, refresh_token, %State{state | applications: applications}}
 
       {:error, reason} ->
-        {:error, reason}
+        {:reply, {:error, reason}, state}
     end
   end
 
