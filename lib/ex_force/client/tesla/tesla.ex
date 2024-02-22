@@ -60,7 +60,8 @@ defmodule ExForce.Client.Tesla do
          {instance_url, Keyword.get(opts, :api_version, @default_api_version)}},
         {Tesla.Middleware.Compression, format: "gzip"},
         {Tesla.Middleware.JSON, engine: Jason},
-        {Tesla.Middleware.Headers, get_headers(opts)}
+        {Tesla.Middleware.Headers, get_headers(opts)},
+        {Tesla.Middleware.Retry, max_retries: 3, delay: 100}
       ],
       {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
@@ -85,7 +86,8 @@ defmodule ExForce.Client.Tesla do
         {Tesla.Middleware.Compression, format: "gzip"},
         Tesla.Middleware.FormUrlencoded,
         {Tesla.Middleware.DecodeJson, engine: Jason},
-        {Tesla.Middleware.Headers, get_headers(opts)}
+        {Tesla.Middleware.Headers, get_headers(opts)},
+        {Tesla.Middleware.Retry, max_retries: 3, delay: 100}
       ],
       {Tesla.Adapter.Finch, [name: config(:finch_client)]}
     )
