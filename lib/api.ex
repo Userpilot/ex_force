@@ -98,7 +98,7 @@ defmodule ExForce.API do
   def get_objects_paginated(app_token, object, param_list, per_page, page)
       when object in ["Contact", "Lead", "Account"] do
     with {:ok, client} <- get_client(app_token) do
-      param_list = ["Id" | Enum.reject(param_list, &is_nil/1)]
+      param_list = maybe_append_id(param_list)
 
       ExForce.query_stream(
         client,
@@ -384,6 +384,14 @@ defmodule ExForce.API do
             "FROM InstalledSubscriberPackage"
         )
       )
+    end
+  end
+
+  def maybe_append_id(param_list) do
+    if Enum.member?(param_list, "Id") do
+      Enum.reject(param_list, &is_nil/1)
+    else
+      ["Id" | Enum.reject(param_list, &is_nil/1)]
     end
   end
 end
