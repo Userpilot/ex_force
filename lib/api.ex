@@ -5,7 +5,7 @@ defmodule ExForce.API do
   Simple wrapper for EXForce library for userpilot needs.
   """
 
-  defp get_client(app_token) do
+  def get_client(app_token) do
     case Salesforce.get_app(app_token) do
       %{client: client} ->
         {:ok, client}
@@ -124,6 +124,59 @@ defmodule ExForce.API do
           |> Map.put("Id", result.id)
       end)
       |> Enum.to_list()
+    end
+  end
+
+  @doc """
+
+  param_list is the list of parameters we want to retrieve from the object, eg: ["Name","Email"]
+
+  Example:
+  ExForce.API.search_objects_by_property_values("NX-44d03690", "Contact", ["Name", "Email"], Email, ["foo1@bar.com", "foo2@bar.com"])
+  """
+  @spec search_objects_by_property_values(
+          binary(),
+          binary(),
+          charlist(),
+          binary(),
+          charlist()
+        ) :: list()
+  def search_objects_by_property_values(
+        app_token,
+        object,
+        param_list,
+        property_name,
+        property_values
+      )
+      when object in ["Contact", "Lead", "Account"] do
+    with {:ok, client} <- get_client(app_token) do
+      param_list = maybe_append_id(param_list)
+
+      sf_sql =
+        "SELECT #{encode_param_list(param_list)} FROM #{object} WHERE #{property_name} IN #{encode_property_values(property_values)}"
+
+      Logger.debug(sf_sql)
+
+      case ExForce.query(
+             client,
+             sf_sql
+           ) do
+        {:ok, %ExForce.QueryResult{done: true, records: records}} ->
+          Enum.map(records, fn record -> record.data end)
+
+        {:error,
+         [
+           %{
+             "errorCode" => code,
+             "message" => message
+           }
+         ]} ->
+          Logger.error(
+            "Error while fetching #{object} for #{app_token} from Salesforce: #{code} with message #{message}"
+          )
+
+          code
+      end
     end
   end
 
@@ -394,4 +447,14 @@ defmodule ExForce.API do
       ["Id" | Enum.reject(param_list, &is_nil/1)]
     end
   end
+
+  defp encode_param_list(param_list) when is_list(param_list), do: Enum.join(param_list, " ,")
+
+  defp encode_property_values(property_values)
+       when is_list(property_values),
+       do: "(" <> Enum.map_join(property_values, ",", &encode_value(&1)) <> ")"
+
+  defp encode_value(value) when is_list(value), do: "'" <> to_string(value) <> "'"
+  defp encode_value(value) when is_integer(value), do: "'" <> Integer.to_string(value) <> "'"
+  defp encode_value(value), do: "'" <> value <> "'"
 end
