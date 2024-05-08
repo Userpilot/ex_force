@@ -5,7 +5,7 @@ defmodule ExForce.API do
   Simple wrapper for EXForce library for userpilot needs.
   """
 
-  def get_client(app_token) do
+  defp get_client(app_token) do
     case Salesforce.get_app(app_token) do
       %{client: client} ->
         {:ok, client}
