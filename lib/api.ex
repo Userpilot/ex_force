@@ -142,7 +142,7 @@ defmodule ExForce.API do
           charlist(),
           binary(),
           charlist()
-        ) :: list()
+        ) :: {:ok, list()} | {:error, binary()}
   def search_objects_by_property_values(
         app_token,
         object,
@@ -164,7 +164,7 @@ defmodule ExForce.API do
              sf_sql
            ) do
         {:ok, %ExForce.QueryResult{done: true, records: records}} ->
-          Enum.map(records, fn record -> record.data end)
+          {:ok, Enum.map(records, fn record -> record.data end)}
 
         {:error,
          [
@@ -177,7 +177,7 @@ defmodule ExForce.API do
             "Error while fetching #{object} for #{app_token} from Salesforce: #{code} with message #{message}"
           )
 
-          code
+          {:error, code}
       end
     end
   end
