@@ -448,10 +448,10 @@ defmodule ExForce.API do
     end
   end
 
-  defp encode_param_list(param_list) when is_list(param_list), do: Enum.join(param_list, " ,")
+  defp encode_param_list(param_list) (param_list), do: Enum.join(param_list, " ,")
 
 
-  defp encode_property_values([] = property_values) when is_list(property_values), do: "('')"
+  defp encode_property_values([] = property_values) (property_values), do: "('')"
 
   defp encode_property_values(property_values)
        when is_list(property_values),
