@@ -102,7 +102,7 @@ defmodule ExForce.API do
 
       ExForce.query_stream(
         client,
-        "SELECT #{Enum.join(param_list, " ,")} FROM #{object} LIMIT #{per_page} OFFSET #{per_page * page}"
+        "SELECT #{encode_param_list(param_list)} FROM #{object} LIMIT #{per_page} OFFSET #{per_page * page}"
       )
       |> Stream.map(fn
         {:error,
