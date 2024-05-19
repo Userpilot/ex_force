@@ -157,8 +157,6 @@ defmodule ExForce.API do
       sf_sql =
         "SELECT #{encode_param_list(param_list)} FROM #{object} WHERE #{property_name} IN #{encode_property_values(property_values)}"
 
-      Logger.debug(sf_sql)
-
       case ExForce.query(
              client,
              sf_sql
