@@ -182,7 +182,7 @@ defmodule ExForce.API do
             "Error while fetching #{object} for #{app_token} from Salesforce: with message #{inspect(error)}"
           )
 
-          {:error, "Server Bad Message"}
+          {:error, error}
       end
     end
   end
