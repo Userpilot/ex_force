@@ -176,6 +176,13 @@ defmodule ExForce.API do
           )
 
           {:error, code}
+
+        {:error, error} ->
+          Logger.error(
+            "Error while fetching #{object} for #{app_token} from Salesforce: with message #{inspect(error)}"
+          )
+
+          {:error, error}
       end
     end
   end
@@ -448,10 +455,9 @@ defmodule ExForce.API do
     end
   end
 
-  defp encode_param_list(param_list) , do: Enum.join(param_list, " ,")
+  defp encode_param_list(param_list), do: Enum.join(param_list, " ,")
 
-
-  defp encode_property_values([] = _property_values) , do: "('')"
+  defp encode_property_values([] = _property_values), do: "('')"
 
   defp encode_property_values(property_values)
        when is_list(property_values),
