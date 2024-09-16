@@ -442,6 +442,43 @@ defmodule ExForce do
     )
   end
 
+  def get_articles(client, params, locale) do
+    case Client.request(client, %Request{
+           method: :get,
+           url:
+             "support/knowledgeArticles?pageSize=100" <>
+               maybe_search_query(params) <> maybe_page_number(params),
+           headers: [{"Accept-Language", locale}]
+         }) do
+      {:ok, %Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Response{body: body}} -> {:error, body}
+      {:error, _} = other -> other
+    end
+  end
+
+  def get_article_by_id(client, id, locale) do
+    case Client.request(client, %Request{
+           method: :get,
+           url: "support/knowledgeArticles/#{id}",
+           headers: [{"Accept-Language", locale}]
+         }) do
+      {:ok, %Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Response{body: body}} -> {:error, body}
+      {:error, _} = other -> other
+    end
+  end
+
+  def get_knowledge_settings(client) do
+    case Client.request(client, %Request{
+           method: :get,
+           url: "knowledgeManagement/settings"
+         }) do
+      {:ok, %Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Response{body: body}} -> {:error, body}
+      {:error, _} = other -> other
+    end
+  end
+
   defp stream_next({client, :halt}), do: {:halt, client}
 
   defp stream_next({client, {:error, _} = error_tuple}), do: {[error_tuple], {client, :halt}}
@@ -458,4 +495,10 @@ defmodule ExForce do
     do: {[], {client, query_retrieve(client, next_records_url)}}
 
   defp full_path?(path), do: String.starts_with?(path, "/services/data/v")
+
+  defp maybe_search_query(%{"search" => search}), do: "&q=#{URI.encode(search)}"
+  defp maybe_search_query(_params), do: ""
+
+  defp maybe_page_number(%{"page_number" => page_number}), do: "&pageNumber=#{page_number}"
+  defp maybe_page_number(_params), do: ""
 end
