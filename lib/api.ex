@@ -27,6 +27,19 @@ defmodule ExForce.API do
     end
   end
 
+  @spec register_new_app(
+          %{
+            :app_token => String.t(),
+            :auth_url => String.t(),
+            :client_id => String.t(),
+            :client_secret => any(),
+            :redirect_uri => String.t(),
+            :code => String.t(),
+            :code_verifier => String.t(),
+            optional(any()) => any()
+          },
+          atom()
+        ) :: any()
   def register_new_app(config, :salesforce) do
     Salesforce.register_app_token(config)
   end
@@ -140,9 +153,11 @@ defmodule ExForce.API do
   end
 
   @doc """
+
   param_list is the list of parameters we want to retrieve from the object, eg: ["Name","Email"]
   property_name is the property we need to search the values throw it, eg: Name, Id, Email, etc ..
   property_values is the values we need to search by them, eg: if the property_name is Email the values could be ["Foo@bar.co"].
+
   Example:
   ExForce.API.search_objects_by_property_values("NX-44d03690", "Contact", ["Name", "Email"], Email, ["foo1@bar.com", "foo2@bar.com"])
   """
