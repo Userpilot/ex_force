@@ -16,29 +16,54 @@ defmodule ExForce.API do
     end
   end
 
-  @spec register_new_app(%{
-          :app_token => String.t(),
-          :auth_url => String.t(),
-          :client_id => String.t(),
-          :client_secret => any(),
-          :redirect_uri => String.t(),
-          :code => String.t(),
-          :code_verifier => String.t(),
-          optional(any()) => any()
-        }) :: any()
-  def register_new_app(config) do
+  defp get_kb_client(app_token) do
+    case SalesforceKB.get_app(app_token) do
+      %{client: client} ->
+        {:ok, client}
+
+      _ ->
+        {:error,
+         "SalesforceKB instance not initialized. Make sure you have setup your SalesforceKB for #{app_token}"}
+    end
+  end
+
+  @spec register_new_app(
+          %{
+            :app_token => String.t(),
+            :auth_url => String.t(),
+            :client_id => String.t(),
+            :client_secret => any(),
+            :redirect_uri => String.t(),
+            :code => String.t(),
+            :code_verifier => String.t(),
+            optional(any()) => any()
+          },
+          atom()
+        ) :: any()
+  def register_new_app(config, :salesforce) do
     Salesforce.register_app_token(config)
   end
 
-  @spec refresh_app_client(%{
-          :app_token => String.t(),
-          :auth_url => String.t(),
-          :client_id => String.t(),
-          :client_secret => any(),
-          :refresh_token => String.t()
-        }) :: any()
-  def refresh_app_client(config) do
+  def register_new_app(config, :salesforce_kb) do
+    SalesforceKB.register_app_token(config)
+  end
+
+  @spec refresh_app_client(
+          %{
+            :app_token => String.t(),
+            :auth_url => String.t(),
+            :client_id => String.t(),
+            :client_secret => any(),
+            :refresh_token => String.t()
+          },
+          atom()
+        ) :: any()
+  def refresh_app_client(config, :salesforce) do
     Salesforce.refresh_app_token(config)
+  end
+
+  def refresh_app_client(config, :salesforce_kb) do
+    SalesforceKB.refresh_app_token(config)
   end
 
   @doc """
@@ -452,6 +477,24 @@ defmodule ExForce.API do
       Enum.reject(param_list, &is_nil/1)
     else
       ["Id" | Enum.reject(param_list, &is_nil/1)]
+    end
+  end
+
+  def get_articles(app_token, params \\ nil, locale) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      ExForce.get_articles(client, params, locale)
+    end
+  end
+
+  def get_article_by_id(app_token, article_id, locale) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      ExForce.get_article_by_id(client, article_id, locale)
+    end
+  end
+
+  def get_knowledge_settings(app_token) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      ExForce.get_knowledge_settings(client)
     end
   end
 
