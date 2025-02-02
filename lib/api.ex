@@ -166,14 +166,16 @@ defmodule ExForce.API do
           binary(),
           charlist(),
           binary(),
-          charlist()
+          charlist(),
+          any()
         ) :: {:ok, list()} | {:error, binary()}
   def search_objects_by_property_values(
         app_token,
         object,
         param_list,
         property_name,
-        property_values
+        property_values,
+        last_seen \\ nil
       )
       when object in ["Contact", "Lead", "Account"] do
     with {:ok, client} <- get_client(app_token) do
@@ -181,6 +183,7 @@ defmodule ExForce.API do
 
       sf_sql =
         "SELECT #{encode_param_list(param_list)} FROM #{object} WHERE #{property_name} IN #{encode_property_values(property_values)}"
+        |> myabe_add_last_seen(last_seen)
 
       case ExForce.query(
              client,
@@ -509,4 +512,7 @@ defmodule ExForce.API do
   defp encode_value(value) when is_list(value), do: "'" <> to_string(value) <> "'"
   defp encode_value(value) when is_integer(value), do: "'" <> Integer.to_string(value) <> "'"
   defp encode_value(value), do: "'" <> value <> "'"
+
+  defp myabe_add_last_seen(query, nil), do: query
+  defp myabe_add_last_seen(query, last_seen), do: query <> " AND LastModifiedDate >= #{last_seen}"
 end
