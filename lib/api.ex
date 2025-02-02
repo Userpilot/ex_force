@@ -175,7 +175,7 @@ defmodule ExForce.API do
         param_list,
         property_name,
         property_values,
-        last_seen \\ nil
+        last_modified \\ nil
       )
       when object in ["Contact", "Lead", "Account"] do
     with {:ok, client} <- get_client(app_token) do
@@ -183,7 +183,7 @@ defmodule ExForce.API do
 
       sf_sql =
         "SELECT #{encode_param_list(param_list)} FROM #{object} WHERE #{property_name} IN #{encode_property_values(property_values)}"
-        |> myabe_add_last_seen(last_seen)
+        |> maybe_add_last_modified(last_modified)
 
       case ExForce.query(
              client,
@@ -513,6 +513,8 @@ defmodule ExForce.API do
   defp encode_value(value) when is_integer(value), do: "'" <> Integer.to_string(value) <> "'"
   defp encode_value(value), do: "'" <> value <> "'"
 
-  defp myabe_add_last_seen(query, nil), do: query
-  defp myabe_add_last_seen(query, last_seen), do: query <> " AND LastModifiedDate >= #{last_seen}"
+  defp maybe_add_last_modified(query, nil), do: query
+
+  defp maybe_add_last_modified(query, last_seen),
+    do: query <> " AND LastModifiedDate >= #{last_seen}"
 end
