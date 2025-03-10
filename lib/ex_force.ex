@@ -501,4 +501,72 @@ defmodule ExForce do
 
   defp maybe_page_number(%{"page_number" => page_number}), do: "&pageNumber=#{page_number}"
   defp maybe_page_number(_params), do: ""
+
+  @doc """
+  Creates a custom field for a Salesforce object.
+  """
+  @spec create_custom_field(client, map()) :: {:ok, any} | {:error, any}
+  def create_custom_field(client, schema) do
+    case Client.request(client, %Request{
+           method: :post,
+           url: "tooling/sobjects/CustomField",
+           body: schema
+         }) do
+      {:ok, %Response{status: 204}} -> {:ok, %{success: true}}
+      {:ok, %Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Response{status: 201, body: body}} -> {:ok, body}
+      {:ok, %Response{body: body}} -> {:error, body}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc """
+  Bulk create objects using the Salesforce Composite API.
+
+  attrs: [
+    %{
+    "Field" => "UserpilotInteraction__c.Platform__c",
+    "ParentId" => "0PSak00000Dq2axGAB",
+    "PermissionsEdit" => true,
+    "PermissionsRead" => true,
+    "SobjectType" => "UserpilotInteraction__c",
+    "attributes" => %{"type" => "FieldPermissions"}
+    }
+  ]
+  """
+  def bulk_create_sobjects(client, attrs) when is_list(attrs) do
+    case Client.request(client, %Request{
+           method: :post,
+           url: "composite/sobjects",
+           body: %{
+             "records" => attrs,
+             "allOrNone" => false
+           }
+         }) do
+      {:ok, %Response{status: 200, body: body}} ->
+        errors =
+          Enum.filter(body, fn record ->
+            not record["success"] and record["errors"] != nil
+          end)
+          |> Enum.map(fn record ->
+            %{
+              message: get_in(record, ["errors", Access.at(0), "message"])
+            }
+          end)
+
+        case errors do
+          [] -> {:ok, body}
+          errors -> {:error, %{errors: errors}}
+        end
+
+      {:ok, %Response{status: 201, body: body}} ->
+        {:ok, body}
+
+      {:ok, %Response{body: body}} ->
+        {:error, body}
+
+      {:error, _} = error ->
+        error
+    end
+  end
 end
