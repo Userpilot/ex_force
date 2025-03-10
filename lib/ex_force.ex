@@ -522,8 +522,19 @@ defmodule ExForce do
 
   @doc """
   Bulk create objects using the Salesforce Composite API.
+
+  attrs: [
+    %{
+    "Field" => "UserpilotInteraction__c.Platform__c",
+    "ParentId" => "0PSak00000Dq2axGAB",
+    "PermissionsEdit" => true,
+    "PermissionsRead" => true,
+    "SobjectType" => "UserpilotInteraction__c",
+    "attributes" => %{"type" => "FieldPermissions"}
+    }
+  ]
   """
-  def bulk_create_sobjects(client, object_name, attrs) when is_list(attrs) do
+  def bulk_create_sobjects(client, attrs) when is_list(attrs) do
     case Client.request(client, %Request{
            method: :post,
            url: "composite/sobjects",
