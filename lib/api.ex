@@ -502,15 +502,13 @@ defmodule ExForce.API do
   end
 
   def create_custom_field(app_token, schema) do
-    with {:ok, client} <- get_client(app_token),
-         %{config: %{access_token: _access_token}} = Salesforce.get_app(app_token) do
+    with {:ok, client} <- get_client(app_token) do
       ExForce.create_custom_field(client, schema)
     end
   end
 
   def bulk_create_sobjects(app_token, attrs) do
-    with {:ok, client} <- get_client(app_token),
-         %{config: %{access_token: _access_token}} = Salesforce.get_app(app_token) do
+    with {:ok, client} <- get_client(app_token) do
       ExForce.bulk_create_sobjects(client, attrs)
     end
   end
