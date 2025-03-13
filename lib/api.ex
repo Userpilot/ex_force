@@ -501,6 +501,18 @@ defmodule ExForce.API do
     end
   end
 
+  def create_custom_field(app_token, schema) do
+    with {:ok, client} <- get_client(app_token) do
+      ExForce.create_custom_field(client, schema)
+    end
+  end
+
+  def bulk_create_sobjects(app_token, attrs) do
+    with {:ok, client} <- get_client(app_token) do
+      ExForce.bulk_create_sobjects(client, attrs)
+    end
+  end
+
   defp encode_param_list(param_list), do: Enum.join(param_list, " ,")
 
   defp encode_property_values([] = _property_values), do: "('')"
