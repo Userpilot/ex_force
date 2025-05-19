@@ -49,6 +49,8 @@ defmodule SalesforceKB do
 
   @impl true
   def init(callback_fun) when is_function(callback_fun, 0) do
+    Logger.warn("Initializing SalesforceKBeeeeee")
+
     applications =
       callback_fun.()
       |> Enum.reduce(%{}, fn app, applications ->
@@ -72,6 +74,8 @@ defmodule SalesforceKB do
 
   @impl true
   def handle_info({:refresh_token, app_token}, %State{applications: applications} = state) do
+    Logger.warn("refreshing SalesforceKBeeeeee")
+
     app = Map.get(applications, String.to_atom(app_token))
 
     case refresh_client(app.config) do
@@ -91,6 +95,8 @@ defmodule SalesforceKB do
 
   @impl true
   def handle_call({:register_app, app}, _from, %State{applications: applications} = state) do
+    Logger.warn("registering SalesforceKBeeeeee")
+
     IO.inspect(app, label: :app)
 
     case init_client(app) do
@@ -114,6 +120,8 @@ defmodule SalesforceKB do
 
   @impl true
   def handle_call({:refresh_token, config}, _from, %State{applications: applications} = state) do
+    Logger.warn("refreshing SalesforceKBeeeeee call")
+
     case refresh_client(config) do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}} ->
         applications =
@@ -192,6 +200,8 @@ defmodule SalesforceKB do
       end
     else
       {:error, reason} ->
+        Logger.warn("1111111111 kb")
+
         Logger.warn(
           "Failed to authenticate for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
@@ -225,6 +235,8 @@ defmodule SalesforceKB do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
       {:error, reason} ->
+        Logger.warn("2222222222 kb")
+
         Logger.warn(
           "Failed to refresh for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )

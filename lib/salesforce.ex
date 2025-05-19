@@ -49,6 +49,8 @@ defmodule Salesforce do
 
   @impl true
   def init(callback_fun) when is_function(callback_fun, 0) do
+    Logger.warn("Initializing Salesforceeeeeee")
+
     applications =
       callback_fun.()
       |> Enum.reduce(%{}, fn app, applications ->
@@ -59,6 +61,8 @@ defmodule Salesforce do
           })
         else
           error ->
+            Logger.warn("2222222222222222222")
+
             Logger.warn(
               "Failed to authenticate for app_token #{app.app_token} with salesforce: #{inspect(error)}"
             )
@@ -72,6 +76,7 @@ defmodule Salesforce do
 
   @impl true
   def handle_info({:refresh_token, app_token}, %State{applications: applications} = state) do
+    Logger.warn("refreshing Salesforceeeeeee")
     app = Map.get(applications, String.to_atom(app_token))
 
     case refresh_client(app.config) do
@@ -91,6 +96,8 @@ defmodule Salesforce do
 
   @impl true
   def handle_call({:register_app, app}, _from, %State{applications: applications} = state) do
+    Logger.warn("registering Salesforceeeeeee")
+
     case init_client(app) do
       {:ok,
        %{
@@ -112,6 +119,8 @@ defmodule Salesforce do
 
   @impl true
   def handle_call({:refresh_token, config}, _from, %State{applications: applications} = state) do
+    Logger.warn("refreshing Salesforceeeeeee call")
+
     case refresh_client(config) do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}} ->
         applications =
@@ -190,6 +199,8 @@ defmodule Salesforce do
       end
     else
       {:error, reason} ->
+        Logger.warn("33333333333333333333")
+
         Logger.warn(
           "Failed to authenticate for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
@@ -223,6 +234,8 @@ defmodule Salesforce do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
       {:error, reason} ->
+        Logger.warn("44444444444444444")
+
         Logger.warn(
           "Failed to refresh for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
