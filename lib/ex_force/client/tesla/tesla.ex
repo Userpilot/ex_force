@@ -58,8 +58,8 @@ defmodule ExForce.Client.Tesla do
       [
         {ExForce.Client.Tesla.Middleware,
          {instance_url, Keyword.get(opts, :api_version, @default_api_version)}},
-        {Tesla.Middleware.JSON, engine: Jason},
         {Tesla.Middleware.Compression, format: "gzip"},
+        {Tesla.Middleware.JSON, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)},
         {Tesla.Middleware.Retry, max_retries: 3, delay: 100}
       ],
@@ -82,10 +82,10 @@ defmodule ExForce.Client.Tesla do
   def build_oauth_client(instance_url, opts \\ []) do
     Tesla.client(
       [
-        {Tesla.Middleware.DecodeJson, engine: Jason},
         {Tesla.Middleware.BaseUrl, instance_url},
         {Tesla.Middleware.Compression, format: "gzip"},
         Tesla.Middleware.FormUrlencoded,
+        {Tesla.Middleware.DecodeJson, engine: Jason},
         {Tesla.Middleware.Headers, get_headers(opts)},
         {Tesla.Middleware.Retry, max_retries: 3, delay: 100}
       ],
