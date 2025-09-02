@@ -1,6 +1,22 @@
 defmodule ExForce.API do
   require Logger
 
+  @standard_objects [
+    "Account",
+    "Campaign",
+    "Case",
+    "Contact",
+    "Contract",
+    "Lead",
+    "Opportunity",
+    "Product",
+    "Pricebook",
+    "Quotev",
+    "Solution",
+    "Task",
+    "User"
+  ]
+
   @moduledoc """
   Simple wrapper for EXForce library for userpilot needs.
   """
@@ -66,6 +82,35 @@ defmodule ExForce.API do
     SalesforceKB.refresh_app_token(config)
   end
 
+  @spec get_available_objects(binary()) :: {:ok, list()} | {:error, any()}
+  def get_available_objects(app_token) do
+    with {:ok, client} <- get_client(app_token),
+         {:ok, %{"sobjects" => objects}} <- ExForce.describe_global(client) do
+      objects
+      |> Enum.filter(&targeted_object?/1)
+      |> Enum.reject(&untargeted_object?/1)
+      |> Enum.map(fn object -> Map.delete(object, "urls") end)
+    end
+  end
+
+  @spec get_available_custom_objects(binary()) :: {:ok, list()} | {:error, any()}
+  def get_available_custom_objects(app_token) do
+    with {:ok, client} <- get_client(app_token) do
+      {:ok, %{"sobjects" => objects}} = ExForce.describe_global(client)
+
+      objects
+      |> Enum.filter(fn object -> object["custom"] == true end)
+      |> Enum.reject(fn object -> String.contains?(object["name"], "Userpilot") end)
+      |> Enum.map(fn object ->
+        %{
+          name: object["name"],
+          label: object["label"],
+          custom: object["custom"]
+        }
+      end)
+    end
+  end
+
   @doc """
 
   Example:
@@ -120,8 +165,7 @@ defmodule ExForce.API do
           number(),
           number()
         ) :: list()
-  def get_objects_paginated(app_token, object, param_list, per_page, page)
-      when object in ["Contact", "Lead", "Account"] do
+  def get_objects_paginated(app_token, object, param_list, per_page, page) do
     with {:ok, client} <- get_client(app_token) do
       param_list = maybe_append_id(param_list)
 
@@ -529,4 +573,12 @@ defmodule ExForce.API do
 
   defp maybe_add_last_modified(query, last_seen),
     do: query <> " AND LastModifiedDate >= #{last_seen}"
+
+  defp targeted_object?(object),
+    do:
+      object["name"] in @standard_objects or
+        String.ends_with?(object["name"], "__c")
+
+  defp untargeted_object?(object),
+    do: String.contains?(object["name"], "Userpilot")
 end
