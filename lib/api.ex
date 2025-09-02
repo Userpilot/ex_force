@@ -89,7 +89,10 @@ defmodule ExForce.API do
       objects
       |> Enum.filter(&targeted_object?/1)
       |> Enum.reject(&untargeted_object?/1)
-      |> Enum.map(fn object -> Map.delete(object, "urls") end)
+      |> Enum.map(&to_object(&1, :standard_object))
+    else
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -101,13 +104,10 @@ defmodule ExForce.API do
       objects
       |> Enum.filter(fn object -> object["custom"] == true end)
       |> Enum.reject(fn object -> String.contains?(object["name"], "Userpilot") end)
-      |> Enum.map(fn object ->
-        %{
-          name: object["name"],
-          label: object["label"],
-          custom: object["custom"]
-        }
-      end)
+      |> Enum.map(&to_object(&1, :custom_object))
+    else
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -143,9 +143,7 @@ defmodule ExForce.API do
     with {:ok, client} <- get_client(app_token),
          {:ok, %{"fields" => fields}} <- ExForce.describe_sobject(client, object) do
       fields
-      |> Enum.map(fn field ->
-        %{title: field["label"], id: field["name"], type: field["type"]}
-      end)
+      |> Enum.map(&to_property/1)
     else
       error -> error
     end
@@ -581,4 +579,24 @@ defmodule ExForce.API do
 
   defp untargeted_object?(object),
     do: String.contains?(object["name"], "Userpilot")
+
+  defp to_object(object, _type) do
+    %{
+      fully_qualified_name: object["name"],
+      singular_name: object["label"],
+      plural_name: object["labelPlural"],
+      primary_object_id: object["name"],
+      is_standard_object: not object["custom"],
+      is_custom_object: object["custom"]
+    }
+  end
+
+  defp to_property(field) do
+    %{
+      title: field["label"],
+      id: field["name"],
+      type: field["type"],
+      is_custom_property: field["custom"]
+    }
+  end
 end
