@@ -90,6 +90,7 @@ defmodule ExForce.API do
       |> Enum.filter(&targeted_object?/1)
       |> Enum.reject(&untargeted_object?/1)
       |> Enum.map(&to_object(&1, :standard_object))
+      |> merge_contact_and_lead_objects()
     else
       {:error, error} ->
         {:error, error}
@@ -598,5 +599,26 @@ defmodule ExForce.API do
       type: field["type"],
       is_custom_property: field["custom"]
     }
+  end
+
+  defp merge_contact_and_lead_objects(objects) do
+    contact_object =
+      objects |> Enum.find(fn object -> object[:fully_qualified_name] == "Contact" end)
+
+    objects
+    |> Enum.reject(fn object ->
+      object[:fully_qualified_name] == "Lead" or object[:fully_qualified_name] == "Contact"
+    end)
+    |> then(fn objects ->
+      [
+        %{
+          contact_object
+          | fully_qualified_name: "Contact/Lead",
+            primary_object_id: "Contact/Lead",
+            singular_name: "Contact/Lead",
+            plural_name: "Contacts/Leads"
+        }
+      ] ++ objects
+    end)
   end
 end
