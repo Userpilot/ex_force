@@ -81,7 +81,6 @@ defmodule ExForce.API do
   def refresh_app_client(config, :salesforce_kb) do
     SalesforceKB.refresh_app_token(config)
   end
-
   @spec get_available_objects(binary()) :: {:ok, list()} | {:error, any()}
   def get_available_objects(app_token) do
     with {:ok, client} <- get_client(app_token),
@@ -91,6 +90,13 @@ defmodule ExForce.API do
       |> Enum.reject(&untargeted_object?/1)
       |> Enum.map(&to_object(&1, :standard_object))
       |> merge_contact_and_lead_objects()
+      |> case do
+        objects when is_list(objects) ->
+          {:ok, objects}
+
+        _ ->
+          {:error, "No available objects"}
+      end
     else
       {:error, error} ->
         {:error, error}
@@ -106,6 +112,7 @@ defmodule ExForce.API do
       |> Enum.filter(fn object -> object["custom"] == true end)
       |> Enum.reject(fn object -> String.contains?(object["name"], "Userpilot") end)
       |> Enum.map(&to_object(&1, :custom_object))
+      |> then(&{:ok, &1})
     else
       {:error, error} ->
         {:error, error}
