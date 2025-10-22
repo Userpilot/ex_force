@@ -81,6 +81,7 @@ defmodule ExForce.API do
   def refresh_app_client(config, :salesforce_kb) do
     SalesforceKB.refresh_app_token(config)
   end
+
   @spec get_available_objects(binary()) :: {:ok, list()} | {:error, any()}
   def get_available_objects(app_token) do
     with {:ok, client} <- get_client(app_token),
@@ -590,6 +591,7 @@ defmodule ExForce.API do
 
   defp to_object(object, _type) do
     %{
+      eventable: true,
       fully_qualified_name: object["name"],
       singular_name: object["label"],
       plural_name: object["labelPlural"],
