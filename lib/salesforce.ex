@@ -138,7 +138,7 @@ defmodule Salesforce do
   # Authentication Response Example:
   # {:ok,
   # %ExForce.OAuthResponse{
-  #   access_token: "00DDp0000018Wr2!AQEAQDV4NO.YPKFZSFV38KxZAnDxVZX6wWV67isrYI124_3tbvJsFAnZwuS05hY0ElkIl_0rSvOBM2dc454I9DkPwPm7COBp",
+  #   access_token: "***************",
   #   id: "https://login.salesforce.com/id/00DDp0000018Wr2MAE/005Dp000002NCZXIA4",
   #   instance_url: "https://userpilot-dev-ed.develop.my.salesforce.com",
   #   issued_at: ~U[2023-11-07 13:19:11.832Z],
@@ -170,8 +170,8 @@ defmodule Salesforce do
              code: code,
              code_verifier: code_verifier,
              code_challenge_method: code_challenge_method
-           ) do
-      {:ok, version_maps} = ExForce.versions(instance_url)
+           ),
+         {:ok, version_maps} <- ExForce.versions(instance_url) do
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
       with client = ExForce.build_client(oauth_response, api_version: latest_version),
@@ -213,8 +213,8 @@ defmodule Salesforce do
              client_id: client_id,
              client_secret: client_secret,
              refresh_token: refresh_token
-           ) do
-      {:ok, version_maps} = ExForce.versions(instance_url)
+           ),
+         {:ok, version_maps} <- ExForce.versions(instance_url) do
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
       client = ExForce.build_client(oauth_response, api_version: latest_version)
