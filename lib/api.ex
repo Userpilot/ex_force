@@ -135,7 +135,6 @@ defmodule ExForce.API do
 
       fields
       |> Enum.filter(fn field -> field["label"] == "Email" end)
-      |> IO.inspect(limit: :infinity)
       |> Enum.filter(fn field -> field["unique"] == true end)
       |> Enum.map(fn field ->
         %{title: field["label"], id: field["name"], type: field["type"]}
@@ -227,8 +226,7 @@ defmodule ExForce.API do
         property_name,
         property_values,
         last_modified \\ nil
-      )
-      when object in ["Contact", "Lead", "Account"] do
+      ) do
     with {:ok, client} <- get_client(app_token) do
       param_list = maybe_append_id(param_list)
 
@@ -591,7 +589,6 @@ defmodule ExForce.API do
 
   defp to_object(object, _type) do
     %{
-      eventable: true,
       fully_qualified_name: object["name"],
       singular_name: object["label"],
       plural_name: object["labelPlural"],
