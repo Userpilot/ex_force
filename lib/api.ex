@@ -1,6 +1,22 @@
 defmodule ExForce.API do
   require Logger
 
+  @standard_objects [
+    "Account",
+    "Campaign",
+    "Case",
+    "Contact",
+    "Contract",
+    "Lead",
+    "Opportunity",
+    "Product",
+    "Pricebook",
+    "Quotev",
+    "Solution",
+    "Task",
+    "User"
+  ]
+
   @moduledoc """
   Simple wrapper for EXForce library for userpilot needs.
   """
@@ -66,6 +82,44 @@ defmodule ExForce.API do
     SalesforceKB.refresh_app_token(config)
   end
 
+  @spec get_available_objects(binary()) :: {:ok, list()} | {:error, any()}
+  def get_available_objects(app_token) do
+    with {:ok, client} <- get_client(app_token),
+         {:ok, %{"sobjects" => objects}} <- ExForce.describe_global(client) do
+      objects
+      |> Enum.filter(&targeted_object?/1)
+      |> Enum.reject(&untargeted_object?/1)
+      |> Enum.map(&to_object(&1, :standard_object))
+      |> merge_contact_and_lead_objects()
+      |> case do
+        objects when is_list(objects) ->
+          {:ok, objects}
+
+        _ ->
+          {:error, "No available objects"}
+      end
+    else
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @spec get_available_custom_objects(binary()) :: {:ok, list()} | {:error, any()}
+  def get_available_custom_objects(app_token) do
+    with {:ok, client} <- get_client(app_token) do
+      {:ok, %{"sobjects" => objects}} = ExForce.describe_global(client)
+
+      objects
+      |> Enum.filter(fn object -> object["custom"] == true end)
+      |> Enum.reject(fn object -> String.contains?(object["name"], "Userpilot") end)
+      |> Enum.map(&to_object(&1, :custom_object))
+      |> then(&{:ok, &1})
+    else
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   @doc """
 
   Example:
@@ -81,7 +135,6 @@ defmodule ExForce.API do
 
       fields
       |> Enum.filter(fn field -> field["label"] == "Email" end)
-      |> IO.inspect(limit: :infinity)
       |> Enum.filter(fn field -> field["unique"] == true end)
       |> Enum.map(fn field ->
         %{title: field["label"], id: field["name"], type: field["type"]}
@@ -98,9 +151,7 @@ defmodule ExForce.API do
     with {:ok, client} <- get_client(app_token),
          {:ok, %{"fields" => fields}} <- ExForce.describe_sobject(client, object) do
       fields
-      |> Enum.map(fn field ->
-        %{title: field["label"], id: field["name"], type: field["type"]}
-      end)
+      |> Enum.map(&to_property/1)
     else
       error -> error
     end
@@ -120,8 +171,7 @@ defmodule ExForce.API do
           number(),
           number()
         ) :: list()
-  def get_objects_paginated(app_token, object, param_list, per_page, page)
-      when object in ["Contact", "Lead", "Account"] do
+  def get_objects_paginated(app_token, object, param_list, per_page, page) do
     with {:ok, client} <- get_client(app_token) do
       param_list = maybe_append_id(param_list)
 
@@ -176,8 +226,7 @@ defmodule ExForce.API do
         property_name,
         property_values,
         last_modified \\ nil
-      )
-      when object in ["Contact", "Lead", "Account"] do
+      ) do
     with {:ok, client} <- get_client(app_token) do
       param_list = maybe_append_id(param_list)
 
@@ -529,4 +578,53 @@ defmodule ExForce.API do
 
   defp maybe_add_last_modified(query, last_seen),
     do: query <> " AND LastModifiedDate >= #{last_seen}"
+
+  defp targeted_object?(object),
+    do:
+      object["name"] in @standard_objects or
+        String.ends_with?(object["name"], "__c")
+
+  defp untargeted_object?(object),
+    do: String.contains?(object["name"], "Userpilot")
+
+  defp to_object(object, _type) do
+    %{
+      fully_qualified_name: object["name"],
+      singular_name: object["label"],
+      plural_name: object["labelPlural"],
+      primary_object_id: object["name"],
+      is_standard_object: not object["custom"],
+      is_custom_object: object["custom"]
+    }
+  end
+
+  defp to_property(field) do
+    %{
+      title: field["label"],
+      id: field["name"],
+      type: field["type"],
+      is_custom_property: field["custom"]
+    }
+  end
+
+  defp merge_contact_and_lead_objects(objects) do
+    contact_object =
+      objects |> Enum.find(fn object -> object[:fully_qualified_name] == "Contact" end)
+
+    objects
+    |> Enum.reject(fn object ->
+      object[:fully_qualified_name] == "Lead" or object[:fully_qualified_name] == "Contact"
+    end)
+    |> then(fn objects ->
+      [
+        %{
+          contact_object
+          | fully_qualified_name: "Contact/Lead",
+            primary_object_id: "Contact/Lead",
+            singular_name: "Contact/Lead",
+            plural_name: "Contacts/Leads"
+        }
+      ] ++ objects
+    end)
+  end
 end
