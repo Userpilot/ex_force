@@ -159,6 +159,21 @@ defmodule ExForce.API do
 
   @doc """
 
+  Example:
+  ExForce.API.get_object_attributes_kb("NX-44d03690")
+  """
+  def get_object_attributes_kb(app_token) do
+    with {:ok, client} <- get_kb_client(app_token),
+         {:ok, %{"fields" => fields}} <- ExForce.describe_sobject(client, "Knowledge__kav") do
+      fields
+      |> Enum.map(&to_property/1)
+    else
+      error -> error
+    end
+  end
+
+  @doc """
+
   param_list is the list of parameters we want to retrieve from the object, eg: ["Name","Email"]
 
   Example:
@@ -529,6 +544,43 @@ defmodule ExForce.API do
       Enum.reject(param_list, &is_nil/1)
     else
       ["Id" | Enum.reject(param_list, &is_nil/1)]
+    end
+  end
+
+  def get_category_groups(app_token, locale) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      ExForce.get_knowledge_groups(client, locale)
+    end
+  end
+
+  def query_articles(app_token, fields, locale) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      case ExForce.query_stream(
+             client,
+             "SELECT #{Enum.join(fields, " ,")}, (SELECT DataCategoryGroupName, DataCategoryName FROM DataCategorySelections) FROM Knowledge__kav WHERE Language = '#{locale}' AND PublishStatus = 'Online' ORDER BY KnowledgeArticleId ASC"
+           ) do
+        stream ->
+          stream
+          |> Stream.map(fn
+            {:error,
+             [
+               %{
+                 "errorCode" => code,
+                 "message" => message
+               }
+             ]} ->
+              Logger.error(
+                "Error while fetching articles for #{app_token} from Salesforce: #{code} with message #{message}"
+              )
+
+              {:error, code}
+
+            result ->
+              result
+          end)
+          |> Enum.to_list()
+          |> then(&{:ok, &1})
+      end
     end
   end
 
