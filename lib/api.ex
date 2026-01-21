@@ -584,6 +584,19 @@ defmodule ExForce.API do
     end
   end
 
+  def search_articles(app_token, search, fields, locale) do
+    with {:ok, client} <- get_kb_client(app_token) do
+      case ExForce.search_articles(
+             client,
+             "FIND {#{search}} IN ALL FIELDS RETURNING Knowledge__kav(#{Enum.join(fields, " ,")} WHERE PublishStatus = 'Online' AND Language = '#{locale}' AND IsLatestVersion = true LIMIT 10)"
+           ) do
+        {:ok, body} -> {:ok, body}
+        {:error, body} -> {:error, body}
+        {:error, _} = other -> other
+      end
+    end
+  end
+
   def get_articles(app_token, params \\ nil, locale) do
     with {:ok, client} <- get_kb_client(app_token) do
       ExForce.get_articles(client, params, locale)

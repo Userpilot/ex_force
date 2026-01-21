@@ -455,6 +455,18 @@ defmodule ExForce do
     end
   end
 
+  def search_articles(client, query) do
+    case Client.request(client, %Request{
+           method: :get,
+           url: "search",
+           query: [q: query]
+         }) do
+      {:ok, %Response{status: 200, body: body}} -> {:ok, body}
+      {:ok, %Response{body: body}} -> {:error, body}
+      {:error, _} = other -> other
+    end
+  end
+
   def get_articles(client, params, locale) do
     case Client.request(client, %Request{
            method: :get,
