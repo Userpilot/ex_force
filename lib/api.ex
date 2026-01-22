@@ -592,7 +592,6 @@ defmodule ExForce.API do
            ) do
         {:ok, body} -> {:ok, body}
         {:error, body} -> {:error, body}
-        {:error, _} = other -> other
       end
     end
   end
