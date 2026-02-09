@@ -668,7 +668,7 @@ defmodule ExForce.API do
       id: field["name"],
       type: field["type"],
       is_custom_property: field["custom"],
-      is_read_only: field["updateable"]
+      is_read_only: not field["updateable"]
     }
   end
 
