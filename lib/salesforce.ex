@@ -59,7 +59,7 @@ defmodule Salesforce do
           })
         else
           error ->
-            Logger.warn(
+            Logger.warning(
               "Failed to authenticate for app_token #{app.app_token} with salesforce: #{inspect(error)}"
             )
 
@@ -190,7 +190,7 @@ defmodule Salesforce do
       end
     else
       {:error, reason} ->
-        Logger.warn(
+        Logger.warning(
           "Failed to authenticate for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
 
@@ -223,7 +223,7 @@ defmodule Salesforce do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
       {:error, reason} ->
-        Logger.warn(
+        Logger.warning(
           "Failed to refresh for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
 
