@@ -138,7 +138,7 @@ defmodule Salesforce do
   # Authentication Response Example:
   # {:ok,
   # %ExForce.OAuthResponse{
-  #   access_token: "00DDp0000018Wr2!AQEAQDV4NO.YPKFZSFV38KxZAnDxVZX6wWV67isrYI124_3tbvJsFAnZwuS05hY0ElkIl_0rSvOBM2dc454I9DkPwPm7COBp",
+  #   access_token: "TOKEN",
   #   id: "https://login.salesforce.com/id/00DDp0000018Wr2MAE/005Dp000002NCZXIA4",
   #   instance_url: "https://userpilot-dev-ed.develop.my.salesforce.com",
   #   issued_at: ~U[2023-11-07 13:19:11.832Z],
