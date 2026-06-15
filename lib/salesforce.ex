@@ -17,6 +17,12 @@ defmodule Salesforce do
   @refresh_interval_ms 2 * 60 * 60 * 1000
   @refresh_jitter_ms 15 * 60 * 1000
   @refresh_retry_ms 5 * 60 * 1000
+  # Retries are spread over [retry, retry + jitter) so a batch that fails
+  # together (e.g. a pool-exhaustion burst) does not re-fire in lockstep.
+  @refresh_retry_jitter_ms 5 * 60 * 1000
+  # Initial refreshes are staggered ~this many ms apart so a (re)boot does not
+  # fire every tenant's token refresh at the shared Finch pool simultaneously.
+  @initial_load_stagger_ms 250
 
   #
   # External API
@@ -35,7 +41,7 @@ defmodule Salesforce do
   def register_app_token(app), do: GenServer.call(__MODULE__, {:register_app, app}, 30_000)
 
   def refresh_app_token(config),
-    do: GenServer.call(__MODULE__, {:refresh_token, config}, 30_000)
+    do: GenServer.call(__MODULE__, {:refresh_token, config}, 60_000)
 
   # Client
 
@@ -64,12 +70,18 @@ defmodule Salesforce do
 
   @impl true
   def handle_continue(:initial_load, callback_fun) do
-    # Fire all initial refreshes immediately, in parallel. Tasks run independently;
-    # each one HTTPS-refreshes its tenant and writes the resulting client+config
-    # directly into ETS before scheduling the next periodic refresh.
-    for app <- safe_callback(callback_fun) do
-      spawn_refresh(app.config)
-    end
+    # Stagger initial refreshes across a window instead of firing them all at
+    # once. Each app is scheduled ~@initial_load_stagger_ms apart (plus jitter),
+    # so a (re)boot never bursts the shared Finch pool against the Salesforce
+    # auth host. Each app then self-schedules its periodic refresh after its
+    # first successful refresh via the {:do_refresh, config} path.
+    callback_fun
+    |> safe_callback()
+    |> Enum.with_index()
+    |> Enum.each(fn {app, idx} ->
+      delay = idx * @initial_load_stagger_ms + :rand.uniform(@initial_load_stagger_ms)
+      Process.send_after(__MODULE__, {:do_refresh, app.config}, delay)
+    end)
 
     {:noreply, callback_fun}
   end
@@ -97,6 +109,10 @@ defmodule Salesforce do
           GenServer.reply(from, response)
 
         {:error, reason} ->
+          Logger.warning(
+            "Salesforce token registration failed for #{app.app_token}: #{inspect(reason)}"
+          )
+
           GenServer.reply(from, {:error, reason})
       end
     end)
@@ -114,11 +130,13 @@ defmodule Salesforce do
           GenServer.reply(from, refresh_token)
 
         {:error, reason} ->
+          retry_ms = jittered_retry_ms()
+
           Logger.warning(
-            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(@refresh_retry_ms, 60_000)}m"
+            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
           )
 
-          Process.send_after(__MODULE__, {:do_refresh, config}, @refresh_retry_ms)
+          Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
           GenServer.reply(from, {:error, reason})
       end
     end)
@@ -143,17 +161,23 @@ defmodule Salesforce do
           Process.send_after(__MODULE__, {:do_refresh, new_config}, jittered_refresh_ms())
 
         {:error, reason} ->
+          retry_ms = jittered_retry_ms()
+
           Logger.warning(
-            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(@refresh_retry_ms, 60_000)}m"
+            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
           )
 
-          Process.send_after(__MODULE__, {:do_refresh, config}, @refresh_retry_ms)
+          Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
       end
     end)
   end
 
   defp jittered_refresh_ms do
     @refresh_interval_ms + :rand.uniform(@refresh_jitter_ms) - div(@refresh_jitter_ms, 2)
+  end
+
+  defp jittered_retry_ms do
+    @refresh_retry_ms + :rand.uniform(@refresh_retry_jitter_ms)
   end
 
   defp safe_callback(fun) do
@@ -237,17 +261,21 @@ defmodule Salesforce do
          } = _config
        ) do
     with {:ok, %{instance_url: instance_url, access_token: access_token} = oauth_response} <-
-           ExForce.OAuth.get_token(auth_url,
-             grant_type: "refresh_token",
-             client_id: client_id,
-             client_secret: client_secret,
-             refresh_token: refresh_token
-           ) do
-      {:ok, version_maps} = ExForce.versions(instance_url)
-      latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
-
-      client = ExForce.build_client(oauth_response, api_version: latest_version)
-
+           timed_step(app_token, "get_token", fn ->
+             ExForce.OAuth.get_token(auth_url,
+               grant_type: "refresh_token",
+               client_id: client_id,
+               client_secret: client_secret,
+               refresh_token: refresh_token
+             )
+           end),
+         {:ok, version_maps} <-
+           timed_step(app_token, "versions", fn -> ExForce.versions(instance_url) end),
+         {:ok, client} <-
+           timed_step(app_token, "build_client", fn ->
+             latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
+             {:ok, ExForce.build_client(oauth_response, api_version: latest_version)}
+           end) do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
       {:error, reason} ->
@@ -257,5 +285,31 @@ defmodule Salesforce do
 
         {:error, reason}
     end
+  end
+
+  # Times a single refresh step in isolation, logs its duration + outcome, and
+  # returns the step result unchanged so the `with` pipeline controls flow.
+  # Any raise inside the step is converted to {:error, _} so one failing step
+  # neither crashes the refresh Task nor hides the timings of earlier steps.
+  defp timed_step(app_token, step, fun) do
+    {us, result} =
+      :timer.tc(fn ->
+        try do
+          fun.()
+        rescue
+          e -> {:error, {:exception, Exception.message(e)}}
+        end
+      end)
+
+    ok? = match?({:ok, _}, result)
+    outcome = if ok?, do: "ok", else: "error"
+    level = if ok?, do: :info, else: :warning
+
+    Logger.log(
+      level,
+      "Salesforce refresh step=#{step} app_token=#{app_token} duration=#{div(us, 1000)}ms outcome=#{outcome}"
+    )
+
+    result
   end
 end
