@@ -225,8 +225,8 @@ defmodule Salesforce do
              code: code,
              code_verifier: code_verifier,
              code_challenge_method: code_challenge_method
-           ) do
-      {:ok, version_maps} = ExForce.versions(instance_url)
+           ),
+         {:ok, version_maps} <- ExForce.versions(instance_url) do
       latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
 
       with client = ExForce.build_client(oauth_response, api_version: latest_version),
