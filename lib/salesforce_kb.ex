@@ -18,6 +18,12 @@ defmodule SalesforceKB do
   use GenServer
 
   @refresh_token_interval_ms 2 * 60 * 60 * 1000
+  # Retry backoffs on refresh failure, jittered so failed batches don't re-fire
+  # in lockstep. Throttled (rate/quota) errors wait much longer.
+  @refresh_retry_ms 5 * 60 * 1000
+  @refresh_retry_jitter_ms 5 * 60 * 1000
+  @throttled_retry_ms 30 * 60 * 1000
+  @throttled_retry_jitter_ms 30 * 60 * 1000
 
   #
   # External API
@@ -59,7 +65,7 @@ defmodule SalesforceKB do
           })
         else
           error ->
-            Logger.warn(
+            Logger.warning(
               "Failed to authenticate for app_token #{app.app_token} with salesforce: #{inspect(error)}"
             )
 
@@ -84,15 +90,42 @@ defmodule SalesforceKB do
 
         {:noreply, %State{state | applications: applications}}
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        # Bug fix: this branch used to drop the refresh chain silently, leaving
+        # the client dead until a node restart. Now the retry policy is driven
+        # by the error class; only permanent errors stop the chain (on purpose).
+        case ExForce.ErrorClass.classify(reason) do
+          :permanent ->
+            Logger.error(
+              "SalesforceKB token refresh permanently failed for #{app_token}: #{inspect(reason)} — " <>
+                "stopping retries; org must re-authenticate via the integrations page"
+            )
+
+          :throttled ->
+            retry_ms = @throttled_retry_ms + :rand.uniform(@throttled_retry_jitter_ms)
+
+            Logger.warning(
+              "SalesforceKB token refresh throttled for #{app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
+            )
+
+            Process.send_after(self(), {:refresh_token, app_token}, retry_ms)
+
+          _transient_or_session ->
+            retry_ms = @refresh_retry_ms + :rand.uniform(@refresh_retry_jitter_ms)
+
+            Logger.warning(
+              "SalesforceKB token refresh failed for #{app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
+            )
+
+            Process.send_after(self(), {:refresh_token, app_token}, retry_ms)
+        end
+
         {:noreply, state}
     end
   end
 
   @impl true
   def handle_call({:register_app, app}, _from, %State{applications: applications} = state) do
-    IO.inspect(app, label: :app)
-
     case init_client(app) do
       {:ok,
        %{
@@ -190,7 +223,7 @@ defmodule SalesforceKB do
        }}
     else
       {:error, reason} ->
-        Logger.warn(
+        Logger.warning(
           "Failed to authenticate for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
 
@@ -221,7 +254,7 @@ defmodule SalesforceKB do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
     else
       {:error, reason} ->
-        Logger.warn(
+        Logger.warning(
           "Failed to refresh for app_token #{app_token} with salesforce: #{inspect(reason)}"
         )
 

@@ -23,6 +23,9 @@ defmodule Salesforce do
   # Initial refreshes are staggered ~this many ms apart so a (re)boot does not
   # fire every tenant's token refresh at the shared Finch pool simultaneously.
   @initial_load_stagger_ms 250
+  # Backoff for :throttled errors (rate/quota limits) — minutes, not the fast retry.
+  @throttled_retry_ms 30 * 60 * 1000
+  @throttled_retry_jitter_ms 30 * 60 * 1000
 
   #
   # External API
@@ -130,13 +133,7 @@ defmodule Salesforce do
           GenServer.reply(from, refresh_token)
 
         {:error, reason} ->
-          retry_ms = jittered_retry_ms()
-
-          Logger.warning(
-            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
-          )
-
-          Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
+          handle_refresh_error(config, reason)
           GenServer.reply(from, {:error, reason})
       end
     end)
@@ -161,15 +158,43 @@ defmodule Salesforce do
           Process.send_after(__MODULE__, {:do_refresh, new_config}, jittered_refresh_ms())
 
         {:error, reason} ->
-          retry_ms = jittered_retry_ms()
-
-          Logger.warning(
-            "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
-          )
-
-          Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
+          handle_refresh_error(config, reason)
       end
     end)
+  end
+
+  # Retry policy driven by error class:
+  #   :permanent — stop the refresh chain; the app stays in ETS with its last
+  #     (dead) client so callers get a clear Salesforce error, but we never
+  #     hammer the token endpoint for an org that revoked us.
+  #   :throttled — long jittered backoff (rate/quota limits reset in minutes/hours).
+  #   :refresh_session / :transient — the existing fast jittered retry.
+  defp handle_refresh_error(config, reason) do
+    case ExForce.ErrorClass.classify(reason) do
+      :permanent ->
+        Logger.error(
+          "Salesforce token refresh permanently failed for #{config.app_token}: #{inspect(reason)} — " <>
+            "stopping retries; org must re-authenticate via the integrations page"
+        )
+
+      :throttled ->
+        retry_ms = @throttled_retry_ms + :rand.uniform(@throttled_retry_jitter_ms)
+
+        Logger.warning(
+          "Salesforce token refresh throttled for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
+        )
+
+        Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
+
+      _transient_or_session ->
+        retry_ms = jittered_retry_ms()
+
+        Logger.warning(
+          "Salesforce token refresh failed for #{config.app_token}: #{inspect(reason)}, retrying in #{div(retry_ms, 60_000)}m"
+        )
+
+        Process.send_after(__MODULE__, {:do_refresh, config}, retry_ms)
+    end
   end
 
   defp jittered_refresh_ms do
@@ -215,8 +240,7 @@ defmodule Salesforce do
          } = _config
        ) do
     with {:ok,
-          %{instance_url: instance_url, refresh_token: new_refresh_token, id: id} =
-            oauth_response} <-
+          %{instance_url: instance_url, refresh_token: new_refresh_token, id: id} = oauth_response} <-
            ExForce.OAuth.get_token(auth_url,
              grant_type: "authorization_code",
              client_id: client_id,
@@ -270,10 +294,13 @@ defmodule Salesforce do
              )
            end),
          {:ok, version_maps} <-
-           timed_step(app_token, "versions", fn -> ExForce.versions(instance_url) end),
+           timed_step(app_token, "versions", fn ->
+             ExForce.versions(instance_url)
+           end),
          {:ok, client} <-
            timed_step(app_token, "build_client", fn ->
              latest_version = version_maps |> Enum.map(&Map.fetch!(&1, "version")) |> List.last()
+
              {:ok, ExForce.build_client(oauth_response, api_version: latest_version)}
            end) do
       {:ok, %{client: client, refresh_token: refresh_token, access_token: access_token}}
