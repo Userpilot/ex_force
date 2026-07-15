@@ -27,14 +27,8 @@ defmodule ExForce.ErrorClass do
 
   require Logger
 
-  # OAuth token endpoint `error` values that can never succeed on retry.
-  # - invalid_grant: expired/revoked refresh token, authentication failure
-  #   (password change or deactivated user revokes all tokens), IP restricted
-  #   or invalid login hours, unapproved consumer.
-  # - invalid_app_acess: Salesforce's own error tables contain this
-  #   misspelling; both spellings are matched defensively.
-  # - inactive_org: org locked/closed/suspended; requires customer/Salesforce
-  #   action and a reconnect afterwards.
+  # invalid_app_acess: Salesforce's own error tables contain this misspelling;
+  # both spellings are matched defensively.
   @permanent_oauth ~w(
     invalid_grant
     invalid_client
@@ -48,8 +42,6 @@ defmodule ExForce.ErrorClass do
     unsupported_grant_type
   )
 
-  # REST API errorCode values where retrying is pointless: the query/config is
-  # wrong or the org has the API disabled.
   @permanent_api ~w(
     MALFORMED_QUERY
     MALFORMED_ID
@@ -60,8 +52,6 @@ defmodule ExForce.ErrorClass do
     INVALID_QUERY_FILTER_OPERATOR
   )
 
-  # REST API errorCode values documented as retryable: UNABLE_TO_LOCK_ROW
-  # (409, row-lock contention), SERVER_UNAVAILABLE (503), UNKNOWN_EXCEPTION (500).
   @transient_api ~w(
     UNABLE_TO_LOCK_ROW
     SERVER_UNAVAILABLE
@@ -75,14 +65,13 @@ defmodule ExForce.ErrorClass do
   or the transport layer into a retry class.
   """
   @spec classify(term()) :: class()
-  # OAuth token endpoint errors: {:error, %{"error" => code}}
   def classify(%{"error" => code}) when code in @permanent_oauth, do: :permanent
   # "Number of logins exceeded" - a refresh storm can trigger this; long backoff.
   def classify(%{"error" => "rate_limit_exceeded"}), do: :throttled
   def classify(%{"error" => _}), do: :transient
 
-  # REST API errors: list of %{"errorCode" => code} - classified by the most
-  # severe entry (a batch containing any permanent error is permanent).
+  # A batch is classified by its most severe entry: any permanent error makes
+  # the whole batch permanent.
   def classify([%{"errorCode" => _} | _] = errors) do
     errors
     |> Enum.map(&classify_api_code(Map.get(&1, "errorCode")))
@@ -91,11 +80,10 @@ defmodule ExForce.ErrorClass do
 
   def classify(%{"errorCode" => code}), do: classify_api_code(code)
 
-  # Wrapped shapes produced by our own layers.
   def classify({:error, reason}), do: classify(reason)
   # timed_step converts raises (e.g. Finch pool checkout timeout) to this shape.
   def classify({:exception, _msg}), do: :transient
-  # Transport-level errors surfaced by the Tesla/Finch adapter.
+
   def classify(%{__struct__: struct}) when struct in [Mint.TransportError, Finch.Error],
     do: :transient
 
@@ -111,7 +99,7 @@ defmodule ExForce.ErrorClass do
   end
 
   defp classify_api_code("INVALID_SESSION_ID"), do: :refresh_session
-  # Daily org API quota (403); retry in minutes/hours, never seconds.
+  # Daily org API quota; retry in minutes/hours, never seconds.
   defp classify_api_code("REQUEST_LIMIT_EXCEEDED"), do: :throttled
   defp classify_api_code(code) when code in @permanent_api, do: :permanent
   defp classify_api_code(code) when code in @transient_api, do: :transient

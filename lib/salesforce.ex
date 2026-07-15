@@ -17,13 +17,13 @@ defmodule Salesforce do
   @refresh_interval_ms 2 * 60 * 60 * 1000
   @refresh_jitter_ms 15 * 60 * 1000
   @refresh_retry_ms 5 * 60 * 1000
-  # Retries are spread over [retry, retry + jitter) so a batch that fails
-  # together (e.g. a pool-exhaustion burst) does not re-fire in lockstep.
+  # Jitter keeps a batch that failed together (e.g. a pool-exhaustion burst)
+  # from re-firing in lockstep.
   @refresh_retry_jitter_ms 5 * 60 * 1000
-  # Initial refreshes are staggered ~this many ms apart so a (re)boot does not
-  # fire every tenant's token refresh at the shared Finch pool simultaneously.
+  # Staggers boot-time refreshes so a (re)boot doesn't burst the Finch pool.
   @initial_load_stagger_ms 250
-  # Backoff for :throttled errors (rate/quota limits) — minutes, not the fast retry.
+  # Rate/quota limits reset in minutes-hours, so throttled errors must never
+  # use the fast retry.
   @throttled_retry_ms 30 * 60 * 1000
   @throttled_retry_jitter_ms 30 * 60 * 1000
 
@@ -73,11 +73,8 @@ defmodule Salesforce do
 
   @impl true
   def handle_continue(:initial_load, callback_fun) do
-    # Stagger initial refreshes across a window instead of firing them all at
-    # once. Each app is scheduled ~@initial_load_stagger_ms apart (plus jitter),
-    # so a (re)boot never bursts the shared Finch pool against the Salesforce
-    # auth host. Each app then self-schedules its periodic refresh after its
-    # first successful refresh via the {:do_refresh, config} path.
+    # Deliberately not refreshed in-line: each app is scheduled a stagger apart
+    # so a (re)boot never fires every tenant's refresh at the Finch pool at once.
     callback_fun
     |> safe_callback()
     |> Enum.with_index()
@@ -145,10 +142,8 @@ defmodule Salesforce do
   # Internals
   #
 
-  # Spawned outside the GenServer mailbox so HTTPS never blocks reads.
-  # The Task writes to ETS itself (the table is :public) before scheduling the
-  # next periodic refresh, eliminating any race between the caller observing a
-  # successful reply and the cache being populated.
+  # Runs in a Task so HTTPS never blocks the GenServer mailbox; the Task writes
+  # to ETS itself to avoid a race between the reply and the cache being populated.
   defp spawn_refresh(config) do
     Task.start(fn ->
       case refresh_client(config) do
@@ -163,12 +158,9 @@ defmodule Salesforce do
     end)
   end
 
-  # Retry policy driven by error class:
-  #   :permanent — stop the refresh chain; the app stays in ETS with its last
-  #     (dead) client so callers get a clear Salesforce error, but we never
-  #     hammer the token endpoint for an org that revoked us.
-  #   :throttled — long jittered backoff (rate/quota limits reset in minutes/hours).
-  #   :refresh_session / :transient — the existing fast jittered retry.
+  # Permanent errors stop the refresh chain on purpose: retrying can never fix
+  # revoked/invalid auth, it only hammers the token endpoint. The app stays in
+  # ETS with its last client so callers still get a clear Salesforce error.
   defp handle_refresh_error(config, reason) do
     case ExForce.ErrorClass.classify(reason) do
       :permanent ->
@@ -213,20 +205,6 @@ defmodule Salesforce do
       []
   end
 
-  # the initializing of the genserver do authenticate with salesforce and build the client,
-  # then it stores the client in ets table.
-  # Authentication Response Example:
-  # {:ok,
-  # %ExForce.OAuthResponse{
-  #   access_token: "00DDp0000018Wr2!AQ...",
-  #   id: "https://login.salesforce.com/id/00DDp0000018Wr2MAE/005Dp000002NCZXIA4",
-  #   instance_url: "https://userpilot-dev-ed.develop.my.salesforce.com",
-  #   issued_at: ~U[2023-11-07 13:19:11.832Z],
-  #   refresh_token: nil,
-  #   scope: "api",
-  #   signature: "*/*",
-  #   token_type: "Bearer"
-  # }}
   defp init_client(
          %{
            app_token: app_token,
@@ -314,10 +292,8 @@ defmodule Salesforce do
     end
   end
 
-  # Times a single refresh step in isolation, logs its duration + outcome, and
-  # returns the step result unchanged so the `with` pipeline controls flow.
-  # Any raise inside the step is converted to {:error, _} so one failing step
-  # neither crashes the refresh Task nor hides the timings of earlier steps.
+  # Raises are converted to {:error, _} so one failing step neither crashes the
+  # refresh Task nor hides the timings of the steps before it.
   defp timed_step(app_token, step, fun) do
     {us, result} =
       :timer.tc(fn ->

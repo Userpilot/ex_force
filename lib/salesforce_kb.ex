@@ -18,8 +18,8 @@ defmodule SalesforceKB do
   use GenServer
 
   @refresh_token_interval_ms 2 * 60 * 60 * 1000
-  # Retry backoffs on refresh failure, jittered so failed batches don't re-fire
-  # in lockstep. Throttled (rate/quota) errors wait much longer.
+  # Jitter keeps failed batches from re-firing in lockstep; throttled
+  # (rate/quota) errors wait much longer because limits reset in minutes-hours.
   @refresh_retry_ms 5 * 60 * 1000
   @refresh_retry_jitter_ms 5 * 60 * 1000
   @throttled_retry_ms 30 * 60 * 1000
@@ -91,9 +91,9 @@ defmodule SalesforceKB do
         {:noreply, %State{state | applications: applications}}
 
       {:error, reason} ->
-        # Bug fix: this branch used to drop the refresh chain silently, leaving
-        # the client dead until a node restart. Now the retry policy is driven
-        # by the error class; only permanent errors stop the chain (on purpose).
+        # Failures must reschedule, otherwise the refresh chain dies and the
+        # client stays stale until a node restart. Only permanent errors stop
+        # the chain (on purpose — retrying can't fix revoked auth).
         case ExForce.ErrorClass.classify(reason) do
           :permanent ->
             Logger.error(
@@ -168,20 +168,6 @@ defmodule SalesforceKB do
 
     {:reply, app, state}
   end
-
-  # the initializing of the genserver do authenticate with salesforce and build the client, then it stores the client in ets table,
-  # Authentication Response Example:
-  # {:ok,
-  # %ExForce.OAuthResponse{
-  #   access_token: "SECRET",
-  #   id: "https://login.salesforce.com/id/00DDp0000018Wr2MAE/005Dp000002NCZXIA4",
-  #   instance_url: "https://userpilot-dev-ed.develop.my.salesforce.com",
-  #   issued_at: ~U[2023-11-07 13:19:11.832Z],
-  #   refresh_token: nil,
-  #   scope: "api",
-  #   signature: "*/*",
-  #   token_type: "Bearer"
-  # }}
 
   defp init_client(
          %{
