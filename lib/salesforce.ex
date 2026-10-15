@@ -164,10 +164,7 @@ defmodule Salesforce do
   defp handle_refresh_error(config, reason) do
     case ExForce.ErrorClass.classify(reason) do
       :permanent ->
-        Logger.error(
-          "Salesforce token refresh permanently failed for #{config.app_token}: #{inspect(reason)} — " <>
-            "stopping retries; org must re-authenticate via the integrations page"
-        )
+        :ok
 
       :throttled ->
         retry_ms = @throttled_retry_ms + :rand.uniform(@throttled_retry_jitter_ms)

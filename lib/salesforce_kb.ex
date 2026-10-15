@@ -96,10 +96,7 @@ defmodule SalesforceKB do
         # the chain (on purpose — retrying can't fix revoked auth).
         case ExForce.ErrorClass.classify(reason) do
           :permanent ->
-            Logger.error(
-              "SalesforceKB token refresh permanently failed for #{app_token}: #{inspect(reason)} — " <>
-                "stopping retries; org must re-authenticate via the integrations page"
-            )
+            :ok
 
           :throttled ->
             retry_ms = @throttled_retry_ms + :rand.uniform(@throttled_retry_jitter_ms)
